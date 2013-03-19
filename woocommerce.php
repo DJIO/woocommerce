@@ -1993,6 +1993,4 @@ class Woocommerce {
  */
 $GLOBALS['woocommerce'] = new Woocommerce();
 
-} // class_exists checkw Woocommerce();
-
 } // class_exists check

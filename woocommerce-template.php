@@ -1502,8 +1502,3 @@ if ( ! function_exists( 'get_product_search_form' ) ) {
 			return apply_filters( 'get_product_search_form', $form );
 	}
 }
-			echo apply_filters( 'get_product_search_form', $form );
-		else
-			return apply_filters( 'get_product_search_form', $form );
-	}
-}

@@ -2451,40 +2451,4 @@ function woocommerce_cancel_unpaid_orders() {
 	wp_schedule_single_event( time() + ( absint( $held_duration ) * 60 ), 'woocommerce_cancel_unpaid_orders' );
 }
 
-add_action( 'woocommerce_cancel_unpaid_orders', 'woocommerce_cancel_unpaid_orders' );option('use_ssl', $user->ID) ) {
-					$secure_cookie = true;
-					force_ssl_admin(true);
-				}
-			}
-		}
-
-		if ( force_ssl_admin() ) $secure_cookie = true;
-		if ( $secure_cookie == '' && force_ssl_login() ) $secure_cookie = false;
-
-		// Login
-		$user = wp_signon( '', $secure_cookie );
-
-		// Redirect filter
-		if ( $secure_cookie && strstr($redirect_to, 'wp-admin') ) $redirect_to = str_replace('http:', 'https:', $redirect_to);
-
-		// Check the username
-		if ( !$_POST['log'] ) :
-			$user = new WP_Error();
-			$user->add('empty_username', '<strong>' . __( 'ERROR', 'woocommerce' ) . '</strong>: ' . __( 'Please enter a username.', 'woocommerce' ));
-		elseif ( !$_POST['pwd'] ) :
-			$user = new WP_Error();
-			$user->add('empty_username', '<strong>' . __( 'ERROR', 'woocommerce' ) . '</strong>: ' . __( 'Please enter your password.', 'woocommerce' ));
-		endif;
-
-		// Redirect if successful
-		if ( !is_wp_error($user) ) :
-			wp_safe_redirect( $redirect_to );
-			exit;
-		endif;
-
-		$login_errors = $user;
-
-	}
-}
-
-add_action( 'init', 'woocommerce_sidebar_login_process', 0 );
+add_action( 'woocommerce_cancel_unpaid_orders', 'woocommerce_cancel_unpaid_orders' );
