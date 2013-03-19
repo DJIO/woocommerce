@@ -49,78 +49,6 @@ add_action( 'wp_ajax_woocommerce_get_refreshed_fragments', 'woocommerce_get_refr
 
 
 /**
- * Process ajax login
- *
- * @access public
- * @return void
- */
-function woocommerce_sidebar_login_ajax_process() {
-
-	check_ajax_referer( 'woocommerce-sidebar-login-action', 'security' );
-
-	header( 'Content-Type: application/json; charset=utf-8' );
-
-	// Get post data
-	$creds = array();
-	$creds['user_login'] 	= $_REQUEST['user_login'];
-	$creds['user_password'] = $_REQUEST['user_password'];
-	$creds['remember'] 		= 'forever';
-	$redirect_to 			= esc_url( $_REQUEST['redirect_to'] );
-
-	// Check for Secure Cookie
-	$secure_cookie = '';
-
-	// If the user wants ssl but the session is not ssl, force a secure cookie.
-	if ( ! force_ssl_admin() ) {
-		$user_name = sanitize_user( $creds['user_login']  );
-		if ( $user = get_user_by('login',  $user_name ) ) {
-			if ( get_user_option( 'use_ssl', $user->ID ) ) {
-				$secure_cookie = true;
-				force_ssl_admin( true );
-			}
-		}
-	}
-
-	if ( force_ssl_admin() ) $secure_cookie = true;
-	if ( $secure_cookie == '' && force_ssl_login() ) $secure_cookie = false;
-
-	// Login
-	$user = wp_signon( $creds, $secure_cookie );
-
-	// Filter the redirect URL.
-	$redirect_to = apply_filters('woocommerce_login_widget_redirect', $redirect_to, isset( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : '', $user);
-
-	// Redirect filter
-	if ( $secure_cookie && strstr( $redirect_to, 'wp-admin' ) ) $redirect_to = str_replace( 'http:', 'https:', $redirect_to );
-
-	// Result
-	$result = array();
-
-	if ( ! is_wp_error( $user ) ) {
-		$result['success'] = 1;
-		$result['redirect'] = $redirect_to;
-	} else {
-		$result['success'] = 0;
-
-		if ( $user->errors ) {
-			foreach ( $user->errors as $error ) {
-				$result['error'] = wp_kses_post( $error[0] );
-				break;
-			}
-		} else {
-			$result['error'] = __( 'Please enter your username and password to login.', 'woocommerce' );
-		}
-	}
-
-	echo esc_js( $_GET['callback'] ) . '(' . json_encode( $result ) . ')';
-
-	die();
-}
-
-add_action( 'wp_ajax_nopriv_woocommerce_sidebar_login_process', 'woocommerce_sidebar_login_ajax_process' );
-
-
-/**
  * AJAX apply coupon on checkout page
  *
  * @access public
@@ -1157,7 +1085,8 @@ function woocommerce_ajax_reduce_order_item_stock() {
 			if ( $_product->exists() && $_product->managing_stock() && isset( $order_item_qty[ $item_id ] ) && $order_item_qty[ $item_id ] > 0 ) {
 
 				$old_stock 		= $_product->stock;
-				$new_quantity 	= $_product->reduce_stock( $order_item_qty[ $item_id ] );
+				$stock_change   = apply_filters( 'woocommerce_reduce_order_stock_quantity', $order_item_qty[ $item_id ], $item_id );
+				$new_quantity 	= $_product->reduce_stock( $stock_change );
 
 				$return[] = sprintf( __( 'Item #%s stock reduced from %s to %s.', 'woocommerce' ), $order_item['product_id'], $old_stock, $new_quantity );
 				$order->add_order_note( sprintf( __( 'Item #%s stock reduced from %s to %s.', 'woocommerce' ), $order_item['product_id'], $old_stock, $new_quantity) );
@@ -1209,7 +1138,8 @@ function woocommerce_ajax_increase_order_item_stock() {
 			if ( $_product->exists() && $_product->managing_stock() && isset( $order_item_qty[ $item_id ] ) && $order_item_qty[ $item_id ] > 0 ) {
 
 				$old_stock 		= $_product->stock;
-				$new_quantity 	= $_product->increase_stock( $order_item_qty[ $item_id ] );
+				$stock_change   = apply_filters( 'woocommerce_restore_order_stock_quantity', $order_item_qty[ $item_id ], $item_id );
+				$new_quantity 	= $_product->increase_stock( $stock_change );
 
 				$return[] = sprintf( __( 'Item #%s stock increased from %s to %s.', 'woocommerce' ), $order_item['product_id'], $old_stock, $new_quantity );
 				$order->add_order_note( sprintf( __( 'Item #%s stock increased from %s to %s.', 'woocommerce' ), $order_item['product_id'], $old_stock, $new_quantity ) );
@@ -1798,6 +1728,74 @@ function woocommerce_product_ordering() {
 	header( 'Content-Type: application/json; charset=utf-8' );
 
 	$previd = isset( $_POST['previd'] ) ? $_POST['previd'] : false;
+	$nextid = isset( $_POST['nextid'] ) ? $_POST['nextid'] : false;
+	$new_pos = array(); // store new positions for ajax
+
+	$siblings = $wpdb->get_results( $wpdb->prepare('
+		SELECT ID, menu_order FROM %1$s AS posts
+		WHERE 	posts.post_type 	= \'product\'
+		AND 	posts.post_status 	IN ( \'publish\', \'pending\', \'draft\', \'future\', \'private\' )
+		AND 	posts.ID			NOT IN (%2$d)
+		ORDER BY posts.menu_order ASC, posts.ID DESC
+	', $wpdb->posts, $post->ID) );
+
+	$menu_order = 0;
+
+	foreach( $siblings as $sibling ) {
+
+		// if this is the post that comes after our repositioned post, set our repositioned post position and increment menu order
+		if ( $nextid == $sibling->ID ) {
+			$wpdb->update(
+				$wpdb->posts,
+				array(
+					'menu_order' => $menu_order
+				),
+				array( 'ID' => $post->ID ),
+				array( '%d' ),
+				array( '%d' )
+			);
+			$new_pos[ $post->ID ] = $menu_order;
+			$menu_order++;
+		}
+
+		// if repositioned post has been set, and new items are already in the right order, we can stop
+		if ( isset( $new_pos[ $post->ID ] ) && $sibling->menu_order >= $menu_order )
+			break;
+
+		// set the menu order of the current sibling and increment the menu order
+		$wpdb->update(
+			$wpdb->posts,
+			array(
+				'menu_order' => $menu_order
+			),
+			array( 'ID' => $sibling->ID ),
+			array( '%d' ),
+			array( '%d' )
+		);
+		$new_pos[ $sibling->ID ] = $menu_order;
+		$menu_order++;
+
+		if ( ! $nextid && $previd == $sibling->ID ) {
+			$wpdb->update(
+				$wpdb->posts,
+				array(
+					'menu_order' => $menu_order
+				),
+				array( 'ID' => $post->ID ),
+				array( '%d' ),
+				array( '%d' )
+			);
+			$new_pos[$post->ID] = $menu_order;
+			$menu_order++;
+		}
+
+	}
+
+	die( json_encode( $new_pos ) );
+}
+
+add_action( 'wp_ajax_woocommerce_product_ordering', 'woocommerce_product_ordering' );
+e;
 	$nextid = isset( $_POST['nextid'] ) ? $_POST['nextid'] : false;
 	$new_pos = array(); // store new positions for ajax
 

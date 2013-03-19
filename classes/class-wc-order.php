@@ -1020,7 +1020,7 @@ class WC_Order {
 
 				foreach ( $this->get_taxes() as $tax ) {
 
-					$tax_string_array[] = sprintf( '%s %s', woocommerce_price( ( $tax[ 'tax_amount' ] + $tax[ 'shipping_tax_amount' ] ) ), $tax[ 'name' ] );
+					$tax_string_array[] = sprintf( '%s %s', woocommerce_price( ( $tax[ 'tax_amount' ] + $tax[ 'shipping_tax_amount' ] ) ), isset( $tax[ 'label' ] ) ? $tax[ 'label' ] : $tax[ 'name' ] );
 				}
 
 			} elseif ( $this->get_total_tax() > 0 ) {
@@ -1333,7 +1333,8 @@ class WC_Order {
 			);
 			wp_update_post( $this_order );
 
-			$this->reduce_order_stock(); // Payment is complete so reduce stock levels
+			if ( apply_filters( 'woocommerce_payment_complete_reduce_order_stock', true, $this->id ) )
+				$this->reduce_order_stock(); // Payment is complete so reduce stock levels
 
 			do_action( 'woocommerce_payment_complete', $this->id );
 		}
@@ -1457,7 +1458,9 @@ class WC_Order {
 
 						$old_stock = $_product->stock;
 
-						$new_quantity = $_product->reduce_stock( $item['qty'] );
+						$qty = apply_filters( 'woocommerce_order_item_quantity', $item['qty'], $this, $item );
+
+						$new_quantity = $_product->reduce_stock( $qty );
 
 						$this->add_order_note( sprintf( __( 'Item #%s stock reduced from %s to %s.', 'woocommerce' ), $item['product_id'], $old_stock, $new_quantity) );
 

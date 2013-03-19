@@ -224,8 +224,7 @@ if ( ! function_exists( 'woocommerce_page_title' ) ) {
 		} else {
 
 			$shop_page_id = woocommerce_get_page_id( 'shop' );
-
-			$page_title = apply_filters( 'the_title', ( $shop_page_title = get_option( 'woocommerce_shop_page_title' ) ) ? $shop_page_title : get_the_title( $shop_page_id ), $shop_page_id );
+			$page_title   = get_the_title( $shop_page_id );
 
 		}
 
@@ -1498,6 +1497,11 @@ if ( ! function_exists( 'get_product_search_form' ) ) {
 		</form>';
 
 		if ( $echo  )
+			echo apply_filters( 'get_product_search_form', $form );
+		else
+			return apply_filters( 'get_product_search_form', $form );
+	}
+}
 			echo apply_filters( 'get_product_search_form', $form );
 		else
 			return apply_filters( 'get_product_search_form', $form );
